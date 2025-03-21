@@ -41,8 +41,6 @@ chain = prompt_template | structured_llm
 response=chain.invoke({"company":user_input})
 symbol=response.symbol
 print(symbol)
-# structured_llm.invoke("")
-# Initialize the LLM
 llm = LLM(
     model="groq/llama-3.3-70b-versatile",
     temperature=0.9
@@ -66,60 +64,12 @@ def fetch_and_save_financial_data(ticker_symbol: str) -> FinancialData:
     Returns:
         FinancialData: Object containing the filename where data is saved.
     """
-    ticker = yf.Ticker(ticker_symbol)
+    ticker = yf.Ticker(symbol)
     historical_data = ticker.history(period='1y')
-    filename = f'{ticker_symbol}_Data.csv'
+    filename = f'{symbol}_Data.csv'
     historical_data.to_csv(filename)
     return FinancialData(filename=filename)
 
-# Tool: Generate forecast from CSV data
-@tool
-def generate_forecast_from_csv(financial_data: FinancialData) -> ForecastData:
-    """
-    Generates a simple 12-month financial forecast from data stored in a CSV file.
-
-    Args:
-        financial_data (FinancialData): Object containing the filename with historical data.
-
-    Returns:
-        ForecastData: Forecasted data.
-    """
-    df = pd.read_csv(financial_data.filename, parse_dates=['Date'], index_col='Date')
-    df['Monthly Return'] = df['Close'].pct_change().resample('M').mean()
-    last_price = df['Close'].iloc[-1]
-    forecasted_prices = [last_price * (1 + df['Monthly Return'].mean())**i for i in range(1, 13)]
-    forecast_dates = pd.date_range(start=df.index[-1], periods=13, freq='M')[1:]
-    forecast_df = pd.DataFrame({'Forecasted Price': forecasted_prices}, index=forecast_dates)
-    return ForecastData(forecast=forecast_df.to_dict())
-
-# Tool: Create visualizations from CSV data and forecast
-@tool
-def create_visualizations_from_csv(financial_data: FinancialData, forecast_data: ForecastData) -> VisualizationOutput:
-    """
-    Creates visualizations for historical and forecasted financial data.
-
-    Args:
-        financial_data (FinancialData): Object containing the filename with historical data.
-        forecast_data (ForecastData): Forecasted data.
-
-    Returns:
-        VisualizationOutput: Confirmation message.
-    """
-    # historical_df = pd.read_csv(financial_data.filename, parse_dates=['Date'], index_col='Date')
-    # forecast_df = pd.DataFrame.from_dict(forecast_data.forecast)
-    # forecast_df.index = pd.to_datetime(forecast_df.index)
-
-    # plt.figure(figsize=(12, 6))
-    # plt.plot(historical_df.index, historical_df['Close'], label='Historical Closing Price')
-    # plt.plot(forecast_df.index, forecast_df['Forecasted Price'], label='Forecasted Price', linestyle='--')
-    # plt.title('Historical and Forecasted Stock Prices')
-    # plt.xlabel('Date')
-    # plt.ylabel('Price (USD)')
-    # plt.legend()
-    # plt.grid(True)
-    # plt.savefig('financial_forecast.png')
-    # plt.close()
-    return VisualizationOutput(message="Visualizations created and saved as financial_forecast.png")
 
 # Define Agents
 data_retrieval_agent = Agent(
@@ -127,22 +77,6 @@ data_retrieval_agent = Agent(
     goal="Fetch financial data for analysis.",
     backstory="An experienced data engineer specializing in retrieving accurate and up-to-date financial market data.",
     tools=[fetch_and_save_financial_data],
-    llm=llm
-)
-
-financial_forecasting_agent = Agent(
-    role="Financial Analyst",
-    goal="Generate 12-month financial forecasts.",
-    backstory="A skilled financial analyst with a knack for predicting market trends using historical data.",
-    tools=[generate_forecast_from_csv],
-    llm=llm
-)
-
-visualization_agent = Agent(
-    role="Visualization Expert",
-    goal="Create visual representations of financial data.",
-    backstory="A creative data scientist with expertise in crafting clear and insightful financial visualizations.",
-    tools=[create_visualizations_from_csv],
     llm=llm
 )
 
@@ -170,9 +104,7 @@ def run():
     crew.kickoff()
 
 run()
-
 import matplotlib.pyplot as plt
-from io import StringIO
 df = pd.read_csv(f'{symbol}_Data.csv', parse_dates=["Date"])
 
 # Calculate Daily Returns
@@ -202,19 +134,6 @@ key_insights = {
     "Lowest Closing Price": round(df['Close'].min(), 2)
 }
 
-# Actionable Recommendations
-if price_change_pct > 2:
-    recommendation = "Bullish trend: Consider buying or holding the stock."
-elif price_change_pct < -2:
-    recommendation = "Bearish trend: Consider risk mitigation or short-term exit."
-else:
-    recommendation = "Neutral trend: Hold and monitor market conditions."
-
-key_insights["Investment Recommendation"] = recommendation
-
-# Risk Assessment
-risk_assessment = "Moderate Risk" if volatility < 0.02 else "High Risk"
-key_insights["Risk Assessment"] = risk_assessment
 
 # Plot Closing Price and Moving Averages
 plt.figure(figsize=(12, 6))
